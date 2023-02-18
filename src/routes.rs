@@ -7,14 +7,15 @@ use crate::{
     ClientMessage, OutBoundChannel, RemoteState, ServerMessage, States, UserChannels, UserId,
 };
 
-pub async fn handle_user_connection(ws: WebSocket, users: UserChannels, states: States) {
+/// User message handling loop.
+pub async fn user_message_loop(ws: WebSocket, users: UserChannels, states: States) {
     use futures_util::StreamExt;
 
     let (ws_send, mut ws_recv) = ws.split();
     let send_channel = self::create_send_channel(ws_send);
 
     // register
-    let user_id = self::send_welcome(&send_channel).await;
+    let user_id = self::send_welcome_message(&send_channel).await;
     log::debug!("new user connected: {user_id:?}");
 
     users.write().await.insert(user_id, send_channel);
@@ -31,8 +32,8 @@ pub async fn handle_user_connection(ws: WebSocket, users: UserChannels, states: 
 
         log::debug!("user sent message: {msg:?}");
 
-        if let Some(msg) = self::parse_message(msg) {
-            self::user_message(user_id, msg, &states).await;
+        if let Some(msg) = self::parse_user_message(msg) {
+            self::handle_user_message(user_id, msg, &states).await;
         }
     }
 
@@ -45,7 +46,7 @@ pub async fn handle_user_connection(ws: WebSocket, users: UserChannels, states: 
     self::broadcast(ServerMessage::GoodBye(user_id), &users).await;
 }
 
-/// Creates a channel for sending message from server to a client.
+/// Creates a send channel from server to a client.
 fn create_send_channel(
     ws_sender: futures_util::stream::SplitSink<WebSocket, ws::Message>,
 ) -> OutBoundChannel {
@@ -65,7 +66,7 @@ fn create_send_channel(
 }
 
 /// Sends a welcome meesage to a client.
-async fn send_welcome(out: &OutBoundChannel) -> UserId {
+async fn send_welcome_message(out: &OutBoundChannel) -> UserId {
     let id = UserId::create_new_user_id();
     let states = ServerMessage::Welcome(id);
     crate::send_server_message(out, &states).await;
@@ -84,8 +85,8 @@ async fn broadcast(msg: ServerMessage, users: &UserChannels) {
     }
 }
 
-/// Parses a websocket message into a client message.
-fn parse_message(msg: ws::Message) -> Option<ClientMessage> {
+/// Parses a user message encoded as a websocket message.
+fn parse_user_message(msg: ws::Message) -> Option<ClientMessage> {
     if msg.is_binary() {
         let msg = msg.into_bytes();
         // malformed input will just be `None`
@@ -95,7 +96,7 @@ fn parse_message(msg: ws::Message) -> Option<ClientMessage> {
     }
 }
 
-async fn user_message(id: UserId, msg: ClientMessage, states: &States) {
+async fn handle_user_message(id: UserId, msg: ClientMessage, states: &States) {
     match msg {
         ClientMessage::State(state) => {
             let msg = RemoteState {

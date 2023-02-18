@@ -31,8 +31,8 @@ async fn main() {
             .and(users)
             .and(states)
             .map(|ws: warp::ws::Ws, users, states| {
-                //
-                ws.on_upgrade(move |socket| routes::handle_user_connection(socket, users, states))
+                // handle user message in the loop
+                ws.on_upgrade(move |socket| routes::user_message_loop(socket, users, states))
             });
 
         status.or(game)
