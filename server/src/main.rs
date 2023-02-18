@@ -1,6 +1,6 @@
 use warp::Filter;
 
-use server_project::{routes, RemoteStates, UserChannels};
+use server::{routes, RemoteStates, UserChannels};
 
 #[tokio::main]
 async fn main() {
@@ -15,13 +15,14 @@ async fn main() {
         let arc_states = states.clone();
 
         tokio::spawn(async move {
-            server_project::update_loop(arc_users, arc_states).await;
+            server::update_loop(arc_users, arc_states).await;
         });
     }
 
     let users = warp::any().map(move || users.clone());
     let states = warp::any().map(move || states.clone());
 
+    // create REST endpoints with WebSocket connetions using `warp`:
     let routes = {
         // access `localhost:3030/status`
         let status = warp::path("status").map(|| warp::reply::html("hello"));
