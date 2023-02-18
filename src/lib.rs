@@ -23,7 +23,7 @@ const UPDATE_INTERVAL: Duration = Duration::from_millis(100);
 
 /// In-memoery game state: `UserId`-> `RemoteState`.
 // consider using database (?) for scalability
-pub type States = Arc<RwLock<HashMap<UserId, RemoteState>>>;
+pub type RemoteStates = Arc<RwLock<HashMap<UserId, RemoteState>>>;
 
 /// Channel of a connected user.
 pub type OutBoundChannel = mpsc::UnboundedSender<Result<Message, warp::Error>>;
@@ -91,12 +91,17 @@ pub async fn send_server_message(tx: &OutBoundChannel, msg: &ServerMessage) {
 }
 
 /// Server-side update loop.
-pub async fn update_loop(users: UserChannels, states: States) {
+pub async fn update_loop(user_channels: UserChannels, remote_states: RemoteStates) {
     loop {
-        let states = states.read().await.values().cloned().collect::<Vec<_>>();
+        let states = remote_states
+            .read()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
 
         if !states.is_empty() {
-            for (&uid, tx) in users.read().await.iter() {
+            for (&uid, tx) in user_channels.read().await.iter() {
                 let states = states
                     .iter()
                     .filter_map(|state| {
@@ -108,8 +113,8 @@ pub async fn update_loop(users: UserChannels, states: States) {
                     })
                     .collect::<Vec<_>>();
 
+                // NOTE(perf): send server message only it actually changed
                 let states = ServerMessage::Update(states);
-
                 self::send_server_message(tx, &states).await;
             }
         }

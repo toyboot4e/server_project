@@ -1,13 +1,13 @@
 use warp::Filter;
 
-use server_project::{routes, States, UserChannels};
+use server_project::{routes, RemoteStates, UserChannels};
 
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
 
     let users = UserChannels::default();
-    let states = States::default();
+    let states = RemoteStates::default();
 
     // spawn update loop
     {

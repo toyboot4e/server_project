@@ -4,11 +4,15 @@ use tokio::sync::mpsc;
 use warp::ws::{self, WebSocket};
 
 use crate::{
-    ClientMessage, OutBoundChannel, RemoteState, ServerMessage, States, UserChannels, UserId,
+    ClientMessage, OutBoundChannel, RemoteState, RemoteStates, ServerMessage, UserChannels, UserId,
 };
 
 /// User message handling loop.
-pub async fn user_message_loop(ws: WebSocket, users: UserChannels, states: States) {
+pub async fn user_message_loop(
+    ws: WebSocket,
+    user_channels: UserChannels,
+    remote_states: RemoteStates,
+) {
     use futures_util::StreamExt;
 
     let (ws_send, mut ws_recv) = ws.split();
@@ -18,7 +22,7 @@ pub async fn user_message_loop(ws: WebSocket, users: UserChannels, states: State
     let user_id = self::send_welcome_message(&send_channel).await;
     log::debug!("new user connected: {user_id:?}");
 
-    users.write().await.insert(user_id, send_channel);
+    user_channels.write().await.insert(user_id, send_channel);
 
     // receiver loop
     while let Some(result) = ws_recv.next().await {
@@ -33,17 +37,17 @@ pub async fn user_message_loop(ws: WebSocket, users: UserChannels, states: State
         log::debug!("user sent message: {msg:?}");
 
         if let Some(msg) = self::parse_user_message(msg) {
-            self::handle_user_message(user_id, msg, &states).await;
+            self::handle_user_message(user_id, msg, &remote_states).await;
         }
     }
 
     log::debug!("user disconnected: {}", user_id);
 
     // unregister
-    users.write().await.remove(&user_id);
-    states.write().await.remove(&user_id);
+    user_channels.write().await.remove(&user_id);
+    remote_states.write().await.remove(&user_id);
 
-    self::broadcast(ServerMessage::GoodBye(user_id), &users).await;
+    self::broadcast(ServerMessage::GoodBye(user_id), &user_channels).await;
 }
 
 /// Creates a send channel from server to a client.
@@ -58,7 +62,7 @@ fn create_send_channel(
 
     tokio::task::spawn(rx.forward(ws_sender).map(|result| {
         if let Err(err) = result {
-            log::error!("websocket send erreor: {err}");
+            log::error!("websocket send error: {err}");
         }
     }));
 
@@ -70,8 +74,7 @@ async fn send_welcome_message(out: &OutBoundChannel) -> UserId {
     let id = UserId::create_new_user_id();
     let states = ServerMessage::Welcome(id);
     crate::send_server_message(out, &states).await;
-
-    unimplemented!()
+    id
 }
 
 /// Broadcasts a message from one user to every other.
@@ -80,7 +83,7 @@ async fn broadcast(msg: ServerMessage, users: &UserChannels) {
 
     // TODO: exclude the original sender
     // TODO: consider joining those futures
-    for tx in users.iter().map(|x| x.1) {
+    for tx in users.values() {
         crate::send_server_message(tx, &msg).await;
     }
 }
@@ -96,7 +99,7 @@ fn parse_user_message(msg: ws::Message) -> Option<ClientMessage> {
     }
 }
 
-async fn handle_user_message(id: UserId, msg: ClientMessage, states: &States) {
+async fn handle_user_message(id: UserId, msg: ClientMessage, states: &RemoteStates) {
     match msg {
         ClientMessage::State(state) => {
             let msg = RemoteState {
