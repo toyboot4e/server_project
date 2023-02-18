@@ -1,11 +1,15 @@
 pub mod routes;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
 use vek::Vec2;
 use warp::ws::Message;
+
+/// In-memoery game state: user ID -> `RemoteState`
+// consider using database (?) for scalability
+pub type States = Arc<RwLock<HashMap<UserId, RemoteState>>>;
 
 /// Channel of a connected user
 pub type OutBoundChannel = mpsc::UnboundedSender<Result<Message, warp::Error>>;
