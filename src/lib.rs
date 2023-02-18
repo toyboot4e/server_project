@@ -11,7 +11,22 @@ use warp::ws::Message;
 pub type OutBoundChannel = mpsc::UnboundedSender<Result<Message, warp::Error>>;
 
 /// Channels of currently connected users (clients)
-pub type UserChannels = Arc<RwLock<HashMap<usize, OutBoundChannel>>>;
+pub type UserChannels = Arc<RwLock<HashMap<UserId, OutBoundChannel>>>;
+
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct UserId(usize);
+
+impl UserId {
+    pub fn from_usize(id: usize) -> Self {
+        Self(id)
+    }
+}
+
+impl fmt::Display for UserId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct State {
@@ -21,7 +36,7 @@ pub struct State {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct RemoteState {
-    pub id: usize,
+    pub id: UserId,
     pub pos: Vec<f32>,
     pub rot: f32,
 }
@@ -29,8 +44,8 @@ pub struct RemoteState {
 /// Message sent from server to client
 #[derive(Deserialize, Serialize, Clone)]
 pub enum ServerMessage {
-    Welcome(usize),
-    GoodBye(usize),
+    Welcome(UserId),
+    GoodBye(UserId),
     Update(Vec<RemoteState>),
 }
 

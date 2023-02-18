@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::mpsc;
 use warp::ws::{Message, WebSocket};
 
-use crate::{OutBoundChannel, ServerMessage, UserChannels};
+use crate::{OutBoundChannel, ServerMessage, UserChannels, UserId};
 
 pub async fn user_connected(ws: WebSocket, users: UserChannels) {
     use futures_util::StreamExt;
@@ -60,10 +60,12 @@ fn create_send_channel(
 
 static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 
-async fn send_welcome(out: &OutBoundChannel) -> usize {
-    let id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
+async fn send_welcome(out: &OutBoundChannel) -> UserId {
+    let id = UserId(NEXT_USER_ID.fetch_add(1, Ordering::Relaxed));
     let states = ServerMessage::Welcome(id);
     crate::send_msg(out, &states).await;
+
+    unimplemented!()
 }
 
 async fn broadcast(msg: ServerMessage, users: &UserChannels) {
