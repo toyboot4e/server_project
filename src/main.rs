@@ -1,9 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
-
-use tokio::sync::{mpsc, RwLock};
 use warp::Filter;
 
-use server_project::{routes, RemoteState, States, UserChannels, UserId};
+use server_project::{routes, States, UserChannels};
 
 #[tokio::main]
 async fn main() {
@@ -25,7 +22,7 @@ async fn main() {
             .and(states)
             .map(|ws: warp::ws::Ws, users, states| {
                 //
-                ws.on_upgrade(move |socket| routes::user_connected(socket, userstates))
+                ws.on_upgrade(move |socket| routes::user_connected(socket, users, states))
             });
 
         status.or(game)

@@ -3,7 +3,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::mpsc;
 use warp::ws::{self, WebSocket};
 
-use crate::{ClientMessage, OutBoundChannel, ServerMessage, States, UserChannels, UserId};
+use crate::{
+    ClientMessage, OutBoundChannel, RemoteState, ServerMessage, States, UserChannels, UserId,
+};
 
 pub async fn user_connected(ws: WebSocket, users: UserChannels, states: States) {
     use futures_util::StreamExt;
@@ -37,8 +39,8 @@ pub async fn user_connected(ws: WebSocket, users: UserChannels, states: States) 
     log::debug!("user disconnected: {}", my_id);
 
     // unregister
-    users.write().await.insert(&my_id);
-    states.write().await.insert(&my_id);
+    users.write().await.remove(&my_id);
+    states.write().await.remove(&my_id);
 
     self::broadcast(ServerMessage::GoodBye(my_id), &users).await;
 }
@@ -93,6 +95,16 @@ fn parse_message(msg: ws::Message) -> Option<ClientMessage> {
     }
 }
 
-async fn user_message(my_id: UserId, msg: ClientMessage, states: &States) {
-    unimplemented!()
+async fn user_message(id: UserId, msg: ClientMessage, states: &States) {
+    match msg {
+        ClientMessage::State(state) => {
+            let msg = RemoteState {
+                id,
+                pos: state.pos,
+                rot: state.rot,
+            };
+
+            states.write().await.insert(msg.id, msg);
+        }
+    }
 }

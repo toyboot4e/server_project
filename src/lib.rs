@@ -35,13 +35,13 @@ impl fmt::Display for UserId {
 #[derive(Deserialize, Serialize, Clone)]
 pub struct State {
     pub pos: Vec2<f32>,
-    pub radius: f32,
+    pub rot: f32,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct RemoteState {
     pub id: UserId,
-    pub pos: Vec<f32>,
+    pub pos: Vec2<f32>,
     pub rot: f32,
 }
 
