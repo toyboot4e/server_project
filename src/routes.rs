@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+//! User connection handling in routes.
 
 use tokio::sync::mpsc;
 use warp::ws::{self, WebSocket};
@@ -7,24 +7,24 @@ use crate::{
     ClientMessage, OutBoundChannel, RemoteState, ServerMessage, States, UserChannels, UserId,
 };
 
-pub async fn user_connected(ws: WebSocket, users: UserChannels, states: States) {
+pub async fn handle_user_connection(ws: WebSocket, users: UserChannels, states: States) {
     use futures_util::StreamExt;
 
     let (ws_send, mut ws_recv) = ws.split();
     let send_channel = self::create_send_channel(ws_send);
 
     // register
-    let my_id = self::send_welcome(&send_channel).await;
-    log::debug!("new user connected: {my_id:?}");
+    let user_id = self::send_welcome(&send_channel).await;
+    log::debug!("new user connected: {user_id:?}");
 
-    users.write().await.insert(my_id, send_channel);
+    users.write().await.insert(user_id, send_channel);
 
     // receiver loop
     while let Some(result) = ws_recv.next().await {
         let msg = match result {
             Ok(msg) => msg,
             Err(err) => {
-                log::warn!("websocket error ({my_id:?}):`{err}`");
+                log::warn!("websocket error ({user_id:?}):`{err}`");
                 break;
             }
         };
@@ -32,19 +32,20 @@ pub async fn user_connected(ws: WebSocket, users: UserChannels, states: States) 
         log::debug!("user sent message: {msg:?}");
 
         if let Some(msg) = self::parse_message(msg) {
-            self::user_message(my_id, msg, &states).await;
+            self::user_message(user_id, msg, &states).await;
         }
     }
 
-    log::debug!("user disconnected: {}", my_id);
+    log::debug!("user disconnected: {}", user_id);
 
     // unregister
-    users.write().await.remove(&my_id);
-    states.write().await.remove(&my_id);
+    users.write().await.remove(&user_id);
+    states.write().await.remove(&user_id);
 
-    self::broadcast(ServerMessage::GoodBye(my_id), &users).await;
+    self::broadcast(ServerMessage::GoodBye(user_id), &users).await;
 }
 
+/// Creates a channel for sending message from server to a client.
 fn create_send_channel(
     ws_sender: futures_util::stream::SplitSink<WebSocket, ws::Message>,
 ) -> OutBoundChannel {
@@ -63,12 +64,11 @@ fn create_send_channel(
     send
 }
 
-static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
-
+/// Sends a welcome meesage to a client.
 async fn send_welcome(out: &OutBoundChannel) -> UserId {
-    let id = UserId(NEXT_USER_ID.fetch_add(1, Ordering::Relaxed));
+    let id = UserId::create_new_user_id();
     let states = ServerMessage::Welcome(id);
-    crate::send_msg(out, &states).await;
+    crate::send_server_message(out, &states).await;
 
     unimplemented!()
 }
@@ -80,7 +80,7 @@ async fn broadcast(msg: ServerMessage, users: &UserChannels) {
     // TODO: exclude the original sender
     // TODO: consider joining those futures
     for tx in users.iter().map(|x| x.1) {
-        crate::send_msg(tx, &msg).await;
+        crate::send_server_message(tx, &msg).await;
     }
 }
 

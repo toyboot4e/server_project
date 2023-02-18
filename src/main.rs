@@ -7,9 +7,19 @@ async fn main() {
     pretty_env_logger::init();
 
     let users = UserChannels::default();
-    let users = warp::any().map(move || users.clone());
-
     let states = States::default();
+
+    // spawn update loop
+    {
+        let arc_users = users.clone();
+        let arc_states = states.clone();
+
+        tokio::spawn(async move {
+            server_project::update_loop(arc_users, arc_states).await;
+        });
+    }
+
+    let users = warp::any().map(move || users.clone());
     let states = warp::any().map(move || states.clone());
 
     let routes = {
@@ -22,7 +32,7 @@ async fn main() {
             .and(states)
             .map(|ws: warp::ws::Ws, users, states| {
                 //
-                ws.on_upgrade(move |socket| routes::user_connected(socket, users, states))
+                ws.on_upgrade(move |socket| routes::handle_user_connection(socket, users, states))
             });
 
         status.or(game)
