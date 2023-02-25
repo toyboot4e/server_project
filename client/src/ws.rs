@@ -27,6 +27,7 @@ impl Connection {
 
     pub fn poll(&mut self) -> Option<Vec<u8>> {
         let socket = self.socket.as_mut()?;
+
         // TODO: do not discard fallible message?
         let msg = socket.read_message().ok()?;
 
