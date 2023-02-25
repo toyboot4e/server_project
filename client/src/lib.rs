@@ -1,3 +1,5 @@
+pub mod ws;
+
 use macroquad::prelude::{self as mq, Color};
 use vek::Vec2;
 

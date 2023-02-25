@@ -7,4 +7,5 @@ edition = "2021"
 
 [dependencies]
 macroquad = "0.3.25"
+tungstenite = "0.18.0"
 vek = "0.15.10"
